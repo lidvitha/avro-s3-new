@@ -2,7 +2,6 @@ package com.example;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
-
 import java.util.Map;
 
 public class S3SinkConfig extends AbstractConfig {

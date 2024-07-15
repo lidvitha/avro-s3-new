@@ -5,44 +5,36 @@ import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
-import org.apache.avro.io.DatumWriter;
-import org.apache.avro.io.Encoder;
-import org.apache.avro.io.EncoderFactory;
-import org.apache.avro.specific.SpecificDatumWriter;
-import org.apache.hadoop.fs.Path;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetWriter;
-import org.apache.parquet.hadoop.ParquetFileWriter;
-import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.parquet.hadoop.ParquetFileWriter;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
+import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
 public class S3SinkTask extends SinkTask {
-    private static final Logger log = LoggerFactory.getLogger(S3SinkTask.class);
-
     private AmazonS3 s3Client;
     private String bucketName;
-    private Schema schema;
-    private final Map<String, List<SinkRecord>> topicBuffers = new HashMap<>();
-    private final Map<String, Long> topicLastFlushTimes = new HashMap<>();
-    private final Map<String, String> topicFileKeys = new HashMap<>();
+    private Map<String, List<SinkRecord>> topicBuffers;
+    private Map<String, Long> topicLastFlushTimes;
+    private Map<String, String> topicFileKeys;
     private int batchSize;
     private long batchTimeMs;
     private int eventCounter = 0;
+    private Schema avroSchema;
 
     @Override
     public void start(Map<String, String> props) {
@@ -56,17 +48,18 @@ public class S3SinkTask extends SinkTask {
                 .withCredentials(new AWSStaticCredentialsProvider(awsCreds))
                 .build();
 
+        topicBuffers = new HashMap<>();
+        topicLastFlushTimes = new HashMap<>();
+        topicFileKeys = new HashMap<>();
+
         batchSize = Integer.parseInt(props.get(S3SinkConfig.S3_BATCH_SIZE));
         batchTimeMs = Long.parseLong(props.get(S3SinkConfig.S3_BATCH_TIME_MS));
 
-        // Load the Avro schema using the class loader
-        try (InputStream schemaStream = getClass().getClassLoader().getResourceAsStream("avro/loan-account-created.avsc")) {
-            if (schemaStream == null) {
-                throw new RuntimeException("Schema file not found: avro/loan-account-created.avsc");
-            }
-            schema = new Schema.Parser().parse(schemaStream);
-        } catch (Exception e) {
-            throw new RuntimeException("Unable to load Avro schema", e);
+        // Load the Avro schema
+        try {
+            avroSchema = new Schema.Parser().parse(new File("/usr/share/java/pluginsnew/resources/LoanRepaymentScheduleCreated.avsc"));
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to load Avro schema", e);
         }
     }
 
@@ -91,14 +84,24 @@ public class S3SinkTask extends SinkTask {
 
                 // Write records to Parquet file
                 try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(new Path(tempFile.toString()))
-                        .withSchema(schema)
+                        .withSchema(avroSchema)
                         .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
                         .withCompressionCodec(CompressionCodecName.SNAPPY)
                         .build()) {
 
                     for (SinkRecord record : topicBuffers.get(topic)) {
-                        GenericRecord avroRecord = createAvroRecord(record);
-                        writer.write(avroRecord);
+                        Struct valueStruct = (Struct) record.value();
+                        GenericRecordBuilder recordBuilder = new GenericRecordBuilder(avroSchema);
+                        recordBuilder.set("schedulePaymentIdentifier", valueStruct.getString("schedulePaymentIdentifier"));
+
+                        Struct accountDetailStruct = valueStruct.getStruct("accountIdentifierDetail");
+                        GenericRecord accountIdentifierDetail = new GenericData.Record(avroSchema.getField("accountIdentifierDetail").schema());
+                        accountIdentifierDetail.put("accountNumber", accountDetailStruct.getString("accountNumber"));
+                        accountIdentifierDetail.put("last4AccountNumber", accountDetailStruct.getString("last4AccountNumber"));
+                        accountIdentifierDetail.put("productIdentifier", accountDetailStruct.getString("productIdentifier"));
+                        recordBuilder.set("accountIdentifierDetail", accountIdentifierDetail);
+
+                        writer.write(recordBuilder.build());
                     }
                 }
 
@@ -107,19 +110,10 @@ public class S3SinkTask extends SinkTask {
                 topicBuffers.get(topic).clear();
                 topicLastFlushTimes.put(topic, System.currentTimeMillis());
                 Files.delete(tempFile);
-            } catch (Exception e) {
-                log.error("Failed to process record: {}", e);
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         }
-    }
-
-    private GenericRecord createAvroRecord(SinkRecord record) {
-        Map<String, Object> value = (Map<String, Object>) record.value();
-        GenericRecordBuilder recordBuilder = new GenericRecordBuilder(schema);
-        for (Schema.Field field : schema.getFields()) {
-            recordBuilder.set(field, value.get(field.name()));
-        }
-        return recordBuilder.build();
     }
 
     private String generateFileKey() {
