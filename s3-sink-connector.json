@@ -1,0 +1,24 @@
+{
+  "name": "s3-sink-connector",
+  "config": {
+    "connector.class": "com.example.S3SinkConnector",
+    "tasks.max": "1",
+    "topics": "new-test-topic",
+    "s3.bucket.name": "demo-kafka-s3",
+    "s3.region": "us-east-1",
+    "s3.batch.size": "3",
+    "s3.batch.time.ms": "3600",
+    "key.converter": "io.confluent.connect.avro.AvroConverter",
+    "key.converter.schema.registry.url": "http://schema-registry:8081",
+    "value.converter": "io.confluent.connect.avro.AvroConverter",
+    "value.converter.schema.registry.url": "http://schema-registry:8081",
+    "format.class": "io.confluent.connect.s3.format.parquet.ParquetFormat",
+    "aws.access.key.id": "AKIAY4SS7RQ7WNIXQX7E",
+    "aws.secret.access.key": "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",
+    "schema.compatibility": "NONE"
+  }
+}
+
+
+
+
