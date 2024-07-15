@@ -13,8 +13,6 @@
     "value.converter": "io.confluent.connect.avro.AvroConverter",
     "value.converter.schema.registry.url": "http://schema-registry:8081",
     "format.class": "io.confluent.connect.s3.format.parquet.ParquetFormat",
-    "aws.access.key.id": "AKIAY4SS7RQ7WNIXQX7E",
-    "aws.secret.access.key": "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",
     "schema.compatibility": "NONE"
   }
 }
