@@ -1,3 +1,28 @@
+private NonDecomposeFormat createNonDecomposeFormatFromRecord(SinkRecord record) {
+    NonDecomposeFormat nonDecomposeFormat = new NonDecomposeFormat();
+    nonDecomposeFormat.setEventId(String.valueOf(getHeaderValue(record, "eventId")));
+    nonDecomposeFormat.setPartition(String.valueOf(record.kafkaPartition()));
+    nonDecomposeFormat.setPayload(record.value().toString());
+    nonDecomposeFormat.setUpdDate(String.valueOf(getHeaderValue(record, "updDate")));
+    nonDecomposeFormat.setPublishTimestampStr(String.valueOf(getHeaderValue(record, "publishTimestampStr")));
+    nonDecomposeFormat.setPayload1(String.valueOf(getHeaderValue(record, "payload1")));
+    nonDecomposeFormat.setTopic(record.topic());
+    nonDecomposeFormat.setEventName(String.valueOf(getHeaderValue(record, "eventName")));
+    nonDecomposeFormat.setEventVersionNumber(String.valueOf(getHeaderValue(record, "eventVersionNumber")));
+    nonDecomposeFormat.setExecutionTimestampStr(String.valueOf(getHeaderValue(record, "executionTimestampStr")));
+    return nonDecomposeFormat;
+}
+
+private Object getHeaderValue(SinkRecord record, String headerKey) {
+    Header header = record.headers().lastWithName(headerKey);
+    return header != null ? header.value() : null;
+}
+
+
+
+
+
+
 
 "Test content" 
 copy custom-s3-sink-connector-0.0.1-SNAPSHOT.jar C:\kafka-connect-config\plugins
