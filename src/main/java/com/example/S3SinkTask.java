@@ -23,6 +23,11 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 
+import org.apache.avro.io.DatumReader;
+import org.apache.avro.io.Decoder;
+import org.apache.avro.io.DecoderFactory;
+import java.io.ByteArrayInputStream;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -104,8 +109,8 @@ private void flushRecords(String topic) {
                         .build()) {
 
                     for (SinkRecord record : topicBuffers.get(topic)) {
-                        Struct valueStruct = (Struct) record.value();
-                        GenericRecord avroRecord = convertStructToGenericRecord(valueStruct, avroSchema);
+                        byte[] value = (byte[]) record.value();
+                        GenericRecord avroRecord = convertBytesToGenericRecord(value, avroSchema);
                         writer.write(avroRecord);
                     }
                 }
@@ -121,15 +126,17 @@ private void flushRecords(String topic) {
         }
     }
 
-    private GenericRecord convertStructToGenericRecord(Struct struct, Schema schema) {
+    private GenericRecord convertBytesToGenericRecord(byte[] value, Schema schema) {
+        ByteArrayInputStream inputStream = new ByteArrayInputStream(value);
+        // Assuming the input byte array is in Avro binary format
+        DatumReader<GenericRecord> datumReader = new SpecificDatumReader<>(schema);
+        Decoder decoder = DecoderFactory.get().binaryDecoder(inputStream, null);
         GenericRecord record = new GenericData.Record(schema);
-        schema.getFields().forEach(field -> {
-            Object value = struct.get(field.name());
-            if (value instanceof Struct) {
-                value = convertStructToGenericRecord((Struct) value, field.schema());
-            }
-            record.put(field.name(), value);
-        });
+        try {
+            record = datumReader.read(null, decoder);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         return record;
     }
 
