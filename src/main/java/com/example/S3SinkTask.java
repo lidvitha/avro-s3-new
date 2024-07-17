@@ -76,7 +76,7 @@ public class S3SinkTask extends SinkTask {
         }
     }
 
-    private void flushRecords(String topic) {
+private void flushRecords(String topic) {
         if (!topicBuffers.get(topic).isEmpty()) {
             try {
                 String key = String.format("%s/%s", topic, topicFileKeys.getOrDefault(topic, generateFileKey()));
@@ -91,17 +91,8 @@ public class S3SinkTask extends SinkTask {
 
                     for (SinkRecord record : topicBuffers.get(topic)) {
                         Struct valueStruct = (Struct) record.value();
-                        GenericRecordBuilder recordBuilder = new GenericRecordBuilder(avroSchema);
-                        recordBuilder.set("schedulePaymentIdentifier", valueStruct.getString("schedulePaymentIdentifier"));
-
-                        Struct accountDetailStruct = valueStruct.getStruct("accountIdentifierDetail");
-                        GenericRecord accountIdentifierDetail = new GenericData.Record(avroSchema.getField("accountIdentifierDetail").schema());
-                        accountIdentifierDetail.put("accountNumber", accountDetailStruct.getString("accountNumber"));
-                        accountIdentifierDetail.put("last4AccountNumber", accountDetailStruct.getString("last4AccountNumber"));
-                        accountIdentifierDetail.put("productIdentifier", accountDetailStruct.getString("productIdentifier"));
-                        recordBuilder.set("accountIdentifierDetail", accountIdentifierDetail);
-
-                        writer.write(recordBuilder.build());
+                        GenericRecord avroRecord = convertStructToGenericRecord(valueStruct, avroSchema);
+                        writer.write(avroRecord);
                     }
                 }
 
@@ -115,6 +106,19 @@ public class S3SinkTask extends SinkTask {
             }
         }
     }
+
+    private GenericRecord convertStructToGenericRecord(Struct struct, Schema schema) {
+        GenericRecord record = new GenericData.Record(schema);
+        schema.getFields().forEach(field -> {
+            Object value = struct.get(field.name());
+            if (value instanceof Struct) {
+                value = convertStructToGenericRecord((Struct) value, field.schema());
+            }
+            record.put(field.name(), value);
+        });
+        return record;
+    }
+
 
     private String generateFileKey() {
         eventCounter++;
