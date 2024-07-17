@@ -45,7 +45,18 @@
             <artifactId>hadoop-mapreduce-client-core</artifactId>
             <version>3.3.1</version>
         </dependency>
+         <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-registry</artifactId>
+            <version>7.0.1</version>
+         </dependency>
     </dependencies>
+    <repositories>
+        <repository>
+          <id>confluent</id>
+          <url>https://packages.confluent.io/maven/</url>
+        </repository>
+    </repositories>
     <build>
         <plugins>
             <plugin>
