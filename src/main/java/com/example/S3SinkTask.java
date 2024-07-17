@@ -6,6 +6,10 @@ import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.PutObjectRequest;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -34,6 +38,7 @@ public class S3SinkTask extends SinkTask {
     private int batchSize;
     private long batchTimeMs;
     private int eventCounter = 0;
+    private SchemaRegistryClient schemaRegistry;
     private Schema avroSchema;
 
     @Override
@@ -55,11 +60,20 @@ public class S3SinkTask extends SinkTask {
         batchSize = Integer.parseInt(props.get(S3SinkConfig.S3_BATCH_SIZE));
         batchTimeMs = Long.parseLong(props.get(S3SinkConfig.S3_BATCH_TIME_MS));
 
-        // Load the Avro schema
+        // Initialize the Schema Registry client
+        schemaRegistry = new CachedSchemaRegistryClient(
+                props.get(S3SinkConfig.SCHEMA_REGISTRY_URL),
+                Integer.parseInt(props.get(S3SinkConfig.SCHEMA_REGISTRY_CAPACITY))
+        );
+
+        // Load the Avro schema from Schema Registry
         try {
-            avroSchema = new Schema.Parser().parse(new File("/usr/share/java/pluginsnew/resources/LoanRepaymentScheduleCreated.avsc"));
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to load Avro schema", e);
+            avroSchema = ((AvroSchema) schemaRegistry.getSchemaBySubjectAndId(
+                    props.get(S3SinkConfig.SCHEMA_SUBJECT),
+                    Integer.parseInt(props.get(S3SinkConfig.SCHEMA_ID))
+            )).rawSchema();
+        } catch (IOException | RestClientException e) {
+            throw new RuntimeException("Failed to load Avro schema from Schema Registry", e);
         }
     }
 
