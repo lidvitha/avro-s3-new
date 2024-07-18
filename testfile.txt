@@ -1,4 +1,48 @@
+private NonDecomposeFormat createNonDecomposeFormatFromRecord(SinkRecord record) {
+    NonDecomposeFormat nonDecomposeFormat = new NonDecomposeFormat();
+    nonDecomposeFormat.setEventId(String.valueOf(getHeaderValue(record, "eventId")));
+    nonDecomposeFormat.setPartition(String.valueOf(record.kafkaPartition()));
 
+    // Manually construct the JSON string
+    String formattedJson = String.format(
+        "{\"waiverEventIdentifier\":\"%s\",\"accountIdentifierDetail\": {\"accountNumber\":\"%s\",\"productIdentifier\":\"%s\",\"subProductCode\":\"%s\"},\"waiverDetail\": {\"waiverUuid\":\"%s\",\"waiverLevelName\":\"%s\",\"waiverStatusName\":\"%s\",\"waiverStartDate\":\"%s\",\"waiverEndDate\":\"%s\",\"waiverDescriptionText\":\"%s\",\"waiverUpdatedDescriptionText\":\"%s\",\"createTimeStamp\":\"%s\",\"updateTimeStamp\":\"%s\"}}",
+        getHeaderValue(record, "waiverEventIdentifier"),
+        getHeaderValue(record, "accountNumber"),
+        getHeaderValue(record, "productIdentifier"),
+        getHeaderValue(record, "subProductCode"),
+        getHeaderValue(record, "waiverUuid"),
+        getHeaderValue(record, "waiverLevelName"),
+        getHeaderValue(record, "waiverStatusName"),
+        getHeaderValue(record, "waiverStartDate"),
+        getHeaderValue(record, "waiverEndDate"),
+        getHeaderValue(record, "waiverDescriptionText"),
+        getHeaderValue(record, "waiverUpdatedDescriptionText"),
+        getHeaderValue(record, "createTimeStamp"),
+        getHeaderValue(record, "updateTimeStamp")
+    );
+
+    // Print the JSON string
+    System.out.println(formattedJson);
+
+    // Set the JSON string as the payload
+    nonDecomposeFormat.setPayload(formattedJson);
+
+    nonDecomposeFormat.setUpdDate(String.valueOf(getHeaderValue(record, "updDate")));
+    nonDecomposeFormat.setPublishTimestampStr(String.valueOf(getHeaderValue(record, "publishTimestampStr")));
+    nonDecomposeFormat.setPayload1(String.valueOf(getHeaderValue(record, "payload1")));
+    nonDecomposeFormat.setTopic(record.topic());
+    nonDecomposeFormat.setEventName(String.valueOf(getHeaderValue(record, "eventName")));
+    nonDecomposeFormat.setEventVersionNumber(String.valueOf(getHeaderValue(record, "eventVersionNumber")));
+    nonDecomposeFormat.setExecutionTimestampStr(String.valueOf(getHeaderValue(record, "executionTimestampStr")));
+
+    return nonDecomposeFormat;
+}
+
+
+
+
+
+---------------
 private void flushRecords(String topic) {
         if (!topicBuffers.get(topic).isEmpty()) {
             try {
