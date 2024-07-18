@@ -1,3 +1,61 @@
+
+private void flushRecords(String topic) {
+        if (!topicBuffers.get(topic).isEmpty()) {
+            try {
+                String key = String.format("%s/%s", topic, topicFileKeys.getOrDefault(topic, generateFileKey()));
+                Path tempFile = Files.createTempFile("parquet", ".parquet");
+
+                // Write records to Parquet file
+                try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(new Path(tempFile.toString()))
+                        .withSchema(NonDecomposeFormat.getClassSchema())
+                        .withWriteMode(ParquetFileWriter.Mode.OVERWRITE)
+                        .withCompressionCodec(CompressionCodecName.SNAPPY)
+                        .build()) {
+
+                    for (SinkRecord record : topicBuffers.get(topic)) {
+                        NonDecomposeFormat nonDecomposeFormat = createNonDecomposeFormatFromRecord(record);
+                        writer.write(nonDecomposeFormat);
+                    }
+                }
+
+                // Upload Parquet file to S3
+                s3Client.putObject(new PutObjectRequest(bucketName, key, tempFile.toFile()));
+                topicBuffers.get(topic).clear();
+                topicLastFlushTimes.put(topic, System.currentTimeMillis());
+                Files.delete(tempFile);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private NonDecomposeFormat createNonDecomposeFormatFromRecord(SinkRecord record) {
+        NonDecomposeFormat nonDecomposeFormat = new NonDecomposeFormat();
+        nonDecomposeFormat.setEventId(String.valueOf(getHeaderValue(record, "eventId")));
+        nonDecomposeFormat.setPartition(String.valueOf(record.kafkaPartition()));
+        nonDecomposeFormat.setPayload(record.value().toString());
+        nonDecomposeFormat.setUpdDate(String.valueOf(getHeaderValue(record, "updDate")));
+        nonDecomposeFormat.setPublishTimestampStr(String.valueOf(getHeaderValue(record, "publishTimestampStr")));
+        nonDecomposeFormat.setPayload1(String.valueOf(getHeaderValue(record, "payload1")));
+        nonDecomposeFormat.setTopic(record.topic());
+        nonDecomposeFormat.setEventName(String.valueOf(getHeaderValue(record, "eventName")));
+        nonDecomposeFormat.setEventVersionNumber(String.valueOf(getHeaderValue(record, "eventVersionNumber")));
+        nonDecomposeFormat.setExecutionTimestampStr(String.valueOf(getHeaderValue(record, "executionTimestampStr")));
+        return nonDecomposeFormat;
+    }
+
+    private Object getHeaderValue(SinkRecord record, String headerKey) {
+        Header header = record.headers().lastWithName(headerKey);
+        return header != null ? header.value() : null;
+    }
+}
+
+
+
+
+
+
+-----------------------------------
 private NonDecomposeFormat createNonDecomposeFormatFromRecord(SinkRecord record) {
     NonDecomposeFormat nonDecomposeFormat = new NonDecomposeFormat();
     nonDecomposeFormat.setEventId(String.valueOf(getHeaderValue(record, "eventId")));
